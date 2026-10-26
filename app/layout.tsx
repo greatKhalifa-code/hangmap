@@ -7,7 +7,7 @@ const geistSans = { variable: "font-sans" };
 const geistMono = { variable: "font-mono" };
 
 export const metadata: Metadata = {
-  title: "LumenMap",
+  title: "HangMap",
   description:
     "Stellar network activity dashboard. Daily volume, active wallets, top dApps, and treemap analytics.",
 };

@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
 
 import { buildFlowGraph } from "@/lib/flow/build-graph";
 import type { FlowEdgeRow } from "@/lib/flow/types";
@@ -20,8 +21,8 @@ describe("buildFlowGraph", () => {
     ];
     const graph = buildFlowGraph(rows);
     const ids = graph.nodes.map((n) => n.id).sort();
-    expect(ids).toEqual([ACCOUNT_A, CONTRACT_A, CONTRACT_B].sort());
-    expect(graph.nodes.length).toBeGreaterOrEqual(3);
+    assert.deepEqual(ids, [ACCOUNT_A, CONTRACT_A, CONTRACT_B].sort());
+    assert.ok(graph.nodes.length >= 3);
   });
 
   it("aggregates parallel edges by id with summed metrics", () => {
@@ -44,14 +45,14 @@ describe("buildFlowGraph", () => {
       },
     ];
     const graph = buildFlowGraph(rows);
-    expect(graph.edges).toHaveLength(1);
+    assert.equal(graph.edges.length, 1);
     const edge = graph.edges[0];
-    expect(edge.source).toBe(ACCOUNT_A);
-    expect(edge.target).toBe(CONTRACT_A);
-    expect(edge.metrics.opCount).toBe(15);
-    expect(edge.metrics.txnCount).toBe(6);
-    expect(edge.metrics.xlmVolume).toBe(1500);
-    expect(edge.assetKeys).toEqual(["usdc:issuer", "xlm:native"]);
+    assert.equal(edge.source, ACCOUNT_A);
+    assert.equal(edge.target, CONTRACT_A);
+    assert.equal(edge.metrics.opCount, 15);
+    assert.equal(edge.metrics.txnCount, 6);
+    assert.equal(edge.metrics.xlmVolume, 1500);
+    assert.deepEqual(edge.assetKeys, ["usdc:issuer", "xlm:native"]);
   });
 
   it("aggregates node metrics from inbound and outbound edges", () => {
@@ -61,8 +62,8 @@ describe("buildFlowGraph", () => {
     ];
     const graph = buildFlowGraph(rows);
     const contract = graph.nodes.find((n) => n.id === CONTRACT_A);
-    expect(contract?.metrics.opCount).toBe(17);
-    expect(contract?.kind).toBe("contract");
+    assert.equal(contract?.metrics.opCount, 17);
+    assert.equal(contract?.kind, "contract");
   });
 
   it("respects label and kind overrides", () => {
@@ -74,13 +75,14 @@ describe("buildFlowGraph", () => {
       kinds: { [ACCOUNT_A]: "protocol" },
     });
     const node = graph.nodes.find((n) => n.id === ACCOUNT_A);
-    expect(node).toMatchObject({ label: "Account A", kind: "protocol" });
+    assert.equal(node?.label, "Account A");
+    assert.equal(node?.kind, "protocol");
   });
 
   it("loads the fixture dataset without credentials", () => {
     const graph = buildFixtureFlowGraph();
-    expect(graph.nodes.length).toBeGreaterThan(0);
-    expect(graph.edges.length).toBeGreaterThan(0);
-    expect(graph.edges.length).toBeLessThanOrEqual(FIXTURE_FLOW_EDGE_ROWS.length);
+    assert.ok(graph.nodes.length > 0);
+    assert.ok(graph.edges.length > 0);
+    assert.ok(graph.edges.length <= FIXTURE_FLOW_EDGE_ROWS.length);
   });
 });

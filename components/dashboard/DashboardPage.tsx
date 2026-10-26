@@ -25,7 +25,6 @@ import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 import { DashboardSearch } from "@/components/dashboard/DashboardSearch";
 import { AddressComparisonPanel } from "@/components/dashboard/AddressComparisonPanel";
 import { ComparisonPanel } from "@/components/dashboard/ComparisonPanel";
-import { AddressComparisonPanel } from "@/components/dashboard/AddressComparisonPanel";
 import { IssuerIntelligence } from "@/components/dashboard/IssuerIntelligence";
 import { SavedViewsControls } from "@/components/dashboard/SavedViewsControls";
 import { WatchlistPanel } from "@/components/dashboard/WatchlistPanel";
@@ -97,7 +96,7 @@ function DashboardContent() {
         <div className="flex items-center gap-3">
           <Image
             src="/logo.png"
-            alt="LumenMap"
+            alt="HangMap"
             width={36}
             height={36}
             className="shrink-0"
@@ -105,7 +104,7 @@ function DashboardContent() {
           />
           <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
-              LumenMap
+              HangMap
             </h1>
             <p className="text-xs text-zinc-400">
               {networkLabel(network).toLowerCase()}

@@ -61,7 +61,6 @@ export function DetailPanel({ onViewFlow }: { onViewFlow?: (account: string) => 
     network,
     setTreemapView,
     setActiveLevelPath,
-    network,
   } = useDashboard();
 
   useEffect(() => {

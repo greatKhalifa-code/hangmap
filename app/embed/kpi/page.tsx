@@ -15,7 +15,7 @@ export default async function EmbedKpiPage({
       style={{ colorScheme: "light dark" }}
     >
       <p className="text-xs uppercase tracking-wide text-zinc-500">
-        LumenMap · {query.period} · {query.metric}
+        HangMap · {query.period} · {query.metric}
       </p>
       <ul className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
         {kpis.map((kpi) => (

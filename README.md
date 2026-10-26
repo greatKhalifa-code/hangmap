@@ -1,12 +1,12 @@
-# LumenMap
+# HangMap
 
-**Stellar network activity dashboard.** Block explorers list transactions one by one. LumenMap shows what the network is doing as a whole: operation activity, top dApps, and how activity splits across payments, DEX, Soroban, and more.
+**Stellar network activity dashboard.** Block explorers list transactions one by one. HangMap shows what the network is doing as a whole: operation activity, top dApps, and how activity splits across payments, DEX, Soroban, and more.
 
-> Open source · [github.com/lumenmap](https://github.com/lumenmap) · Version: **0.1**
+> Open source · [github.com/hangmap](https://github.com/hangmap) · Version: **0.1**
 
 ## What you see
 
-| Question | Answer in LumenMap |
+| Question | Answer in HangMap |
 | --- | --- |
 | How busy is the network? | Total operations for the day, week, or month |
 | What is happening on chain? | Share of payments, DEX, Soroban, trustlines, and account ops |
@@ -18,851 +18,147 @@ The treemap is the center of the product. Tile size is share of operation activi
 
 ## Why not just use an explorer?
 
-Explorers are built to look up a single address or transaction. LumenMap is built to read the network at a glance and then zoom in. It groups raw operations into categories, ranks the actors behind them, and surfaces the few numbers that matter before you ever open a block detail page.
+Explorers are built to look up a single address or transaction. HangMap is built to read the network at a glance and then zoom in. It groups raw operations into categories, ranks the actors behind them, and surfaces the few numbers that matter before you ever open a block detail page.
 
 ---
 
-## Current version
+## Architecture & Codebase Split
 
-Single-page dashboard. Data comes from [Hubble](https://developers.stellar.org/docs/data/analytics/hubble) on BigQuery. Definitions, coverage rules, and limitations are in the [versioned metric methodology](docs/metric-methodology.md).
+HangMap is split into two independent codebases:
 
-### Available now
-
-- Hierarchical treemap with D3 squarified layout, drill-down, and breadcrumbs
-- Two views: **Operation Types** and **Accounts & Contracts**
-- Five treemap metrics: operation count, transaction count, XLM payment volume, verified Circle USDC volume, and adapter-backed Protocol TVL
-- Period filters: 1 day, 7 days, 30 days, calendar month, plus side-by-side period comparison
-- Shareable URL state: period, metric, view, drill-down path, network, and comparison period
-- KPI cards: total operations, Soroban share, top category, active contracts, active wallets, and active destinations (sparklines on operations and Soroban share)
-- Operations-vs-transactions time-series chart (UTC buckets, partial-bucket flags), stacked category-share area chart (absolute and % modes, UTC buckets), and daily / hour-of-week activity heatmaps
-- Dashboard search across loaded accounts, contracts, assets, protocols, and categories
-- Protocol activity ranking grouped by protocol, with entity labels for known wallets and contracts
-- Per-asset payment-volume panel (native units, issuers kept distinct)
-- Detail panel with share, activity count, protocol, address, and approximate first-seen/age context for accounts and contracts
-- Fixture mode for credential-free local runs on deterministic sample data (not live mainnet data)
-- Responsive dark layout
-
-### Coming next
-
-- Live Protocol TVL adapters (Hubble/venue balance wiring plus the versioned price pipeline; today's snapshots are adapter-backed samples)
-- Cross-asset USD normalization under an explicit versioned methodology
-- Testnet parity for `usdc`, `xlm_volume`, and `protocol_tvl`
-- Broader protocol coverage for anchors, DeFi, and issuers
-- BigQuery cost tuning and production cache hardening
-
-Available today: [operation counts](docs/metric-methodology.md#operations), [transaction counts](docs/metric-methodology.md#transactions), [active source wallets and destinations](docs/metric-methodology.md#active-accounts), [active contracts](docs/metric-methodology.md#active-contracts), XLM and verified Circle USDC [payment volume](docs/metric-methodology.md#payment-volume) (including [USDC-scoped volume](docs/metric-methodology.md#usdc-payment-volume)), and adapter-backed [Protocol TVL](docs/metric-methodology.md#total-value-locked-tvl). See the [metric methodology](docs/metric-methodology.md) before comparing metrics: counts, asset-denominated volumes, and point-in-time TVL snapshots are deliberately different metrics.
-
-### What's shipped
-
-| Capability | Status | Reference |
-| --- | --- | --- |
-| Dashboard search | Shipped | [#207](https://github.com/lumenmap/lumenmap/pull/207) |
-| Operations/transactions time-series chart | Shipped | [#214](https://github.com/lumenmap/lumenmap/pull/214) |
-| Category-share chart | Shipped | [#222](https://github.com/lumenmap/lumenmap/pull/222) |
-| Protocol TVL | Shipped | [#229](https://github.com/lumenmap/lumenmap/pull/229) |
-| Fixture mode | Shipped | [#225](https://github.com/lumenmap/lumenmap/pull/225) |
-| URL state and period comparison | Shipped | [#265](https://github.com/lumenmap/lumenmap/pull/265) |
-
-Category-share work started under #216 on the same branch and shipped via #222. Shareable URL state was introduced in [#228](https://github.com/lumenmap/lumenmap/pull/228) and extended with the comparison period in #265. `period`, `metric`, `view`, drill-down `path`, `network`, and `compare` are the shareable/restorable query params (see `lib/dashboard-url-state.ts`).
-
----
-
-## Roadmap
-
-Shipped dashboard capabilities are listed in [What's shipped](#whats-shipped) above, so the roadmap below tracks future work only.
-
-### Next: live TVL backend
-
-- Live protocol balance adapters (Hubble/venue wiring) with snapshot timestamps
-- Versioned price pipeline (blocked on the pricing work in #11)
-- Cross-asset USD normalization under an explicit versioned methodology
-
-### Next: coverage and production
-
-- Testnet parity for `usdc`, `xlm_volume`, and `protocol_tvl`
-- Broader protocol coverage for anchors, DeFi, and issuers
-- Uncapped network-wide counts where treemap children stay top-N capped
-- BigQuery cost tuning and production cache hardening
-
-### In-progress backend work (#21, #28)
-
-The transaction-count query scope from #21 and the per-asset payment-volume scope from #28 already power the dashboard (transaction treemaps and time series; per-asset XLM/USDC volumes). What remains backend work: uncapped full-universe counts where treemap children stay top-N capped, hardened failure handling where queries degrade to empty results, and the live TVL adapter plus price pipeline above. Dashboard availability must not be read as "no backend work left" for these metrics.
-
----
-
-## Architecture
+1. **Frontend (`hangmap`)**: Next.js 16 application containing the dashboard UI, D3 treemaps, charts, corridors, and client state.
+2. **Backend (`hangmap-backend`)**: Standalone Node.js + Express TypeScript service in `../lumenmap-backend` handling BigQuery Hubble queries, OpenTelemetry telemetry, caching, rate limiting, and REST API endpoints.
 
 ```text
-Browser
-  → GET /api/v1/activity?period=1d|7d|30d|month
-  → app/api/activity/_handler.ts (shared by /api/v1/activity and /api/activity)
-  → lib/hubble/activity.ts
-      → BigQuery queries
-      → in-memory cache, 15 min TTL
-      → lib/entities/build-treemap.ts
-  → labels from entities.json, Stellar Expert, Hubble home_domain
+Browser / Client
+      │
+      ▼ (Port 3000)
+Next.js Frontend (HangMap)
+      │
+      │  Rewrites: /api/:path* → NEXT_PUBLIC_API_URL/api/:path*
+      ▼ (Port 3001)
+Express API Backend (HangMap Backend)
+      │
+      ├─► BigQuery (Hubble Stellar DBT Dataset)
+      └─► Fallback / Local Fixture Mode (Offline / Testing)
 ```
 
-Dataset: `crypto-stellar.crypto_stellar_dbt` (mainnet default)
+---
 
-### Network toggle (mainnet / testnet)
+## Features
 
-The dashboard header selects `mainnet` (default) or `testnet`. Selection is
-mirrored in the URL as `?network=testnet` and in activity API metadata as
-`metricProvenance.*.coverage.network` (`stellar_mainnet` | `stellar_testnet`).
-
-Dataset env overrides (never commit secrets):
-
-| Variable | Purpose |
-| --- | --- |
-| `LUMENMAP_NETWORK` | Default network (`mainnet` \| `testnet`); fixture mode can simulate testnet |
-| `LUMENMAP_BIGQUERY_DATASET` | Force dataset for any network (`project.dataset`) |
-| `LUMENMAP_MAINNET_BIGQUERY_DATASET` | Mainnet dataset override |
-| `LUMENMAP_TESTNET_BIGQUERY_DATASET` | Required for live testnet queries |
-
-Unsupported on testnet today: `usdc`, `xlm_volume`, `protocol_tvl` (UI shows an
-explicit disabled message). Ops / transactions remain available.
-
-### Queries today
-
-| Query | Output |
-| --- | --- |
-| Operations by type | Counts per `type_string` |
-| Transactions by type | Distinct transaction counts per `type_string` |
-| Top accounts | Most active wallets per operation type |
-| Top contracts | Most invoked Soroban contracts |
-| Active wallets | Distinct source accounts per period |
-| Active destinations | Distinct receiving accounts per period |
-| Active contracts (uncapped) | Distinct contract count, independent of the leaderboard cap |
-| Operations/transactions time series | Hourly/daily UTC buckets with partial-bucket flags |
-| Category-share series | UTC-bucketed category totals |
-| Per-asset payment volume | Amounts grouped by asset identity (XLM, verified Circle USDC) |
-| Soroban functions | Counts per function and per contract |
-| Protocol TVL snapshots | Adapter-backed USD snapshots with complete/partial/stale status |
-
-### Queries planned
-
-| Metric | Source |
-| --- | --- |
-| Live protocol TVL balances and prices | Hubble/venue adapters with a versioned price pipeline |
-
-### Entity first-seen context
-
-Selecting an account or contract loads `GET /api/v1/entities/first-seen?type=account|contract&id=...&network=mainnet|testnet` independently of dashboard activity. The response gives the earliest observed Hubble operation for accounts or hourly contract fee record for contracts. This is **not a creation timestamp**: earlier activity may be absent, Hubble ingestion can lag, and contract times are rounded to an hour. The panel labels age as approximate and shows “Unavailable” if no record is found or the optional lookup fails. This lookup is limited to the lower of the configured BigQuery maximum bytes billed and 1 GB, with a 24-hour positive cache and a 15-minute unavailable cache. Fixture entities use fixed sample dates.
+- **Hierarchical Treemap**: D3 squarified layout, drill-down breadcrumbs, and node detail view.
+- **Views**: Operation Types, Accounts & Contracts, and Payment Flow Corridors.
+- **Metrics**: Operation count, transaction count, XLM volume, verified Circle USDC volume, and Protocol TVL.
+- **Time Periods**: 1 day, 7 days, 30 days, calendar month, with side-by-side period comparisons.
+- **Time-Series Analytics**: Hourly/daily UTC buckets, operations vs. transactions, and stacked category-share area charts.
+- **Interactive Search**: Typo-tolerant search across accounts, contracts, protocols, assets, and categories.
+- **Watchlist & Research Notes**: Local storage persistence, CSV import/export, and delta tracking.
+- **Shareable Snapshots**: Deep-link URL state and sharable research view snapshots.
+- **Deterministic Fixtures**: Works completely offline without requiring Google Cloud / BigQuery credentials.
 
 ---
 
-## Tech stack
-
-| Layer | Technology |
-| --- | --- |
-| Framework | [Next.js 16](https://nextjs.org/) |
-| Language | TypeScript |
-| Styling | Tailwind CSS 4 |
-| Treemap | [d3-hierarchy](https://github.com/d3/d3-hierarchy) |
-| Charts | Recharts (category share) and custom SVG (time series) |
-| Data fetching | [TanStack Query](https://tanstack.com/query) |
-| Analytics | [Hubble](https://developers.stellar.org/docs/data/analytics/hubble) / BigQuery |
-
----
-
-## Getting started
+## Getting Started
 
 ### Prerequisites
 
-- Node.js 20.x (use `nvm use` to activate the version in `.nvmrc`)
-- Google Cloud project with BigQuery API enabled
-- Service account with BigQuery User role
+- Node.js >= 20.x
+- npm >= 10.x
 
-### Install and run (fixture mode, no GCP)
+### 1. Running the Backend Service
 
-Fixture mode serves checked-in, schema-validated activity sample data so you can run the dashboard without BigQuery credentials. **This is not live mainnet / Hubble data.**
+In `../lumenmap-backend`:
 
 ```bash
-cp .env.example .env.local
-# In .env.local:
-# LUMENMAP_DATA_SOURCE=fixture
+cd ../lumenmap-backend
 npm install
 npm run dev
 ```
 
-### Import an address research list
+The backend starts at `http://localhost:3001`.
 
-Open the dashboard's **Watchlist** and choose **Import CSV/TXT**. A CSV may have
-an `address` header in any column; without that header, the first column is
-used. TXT files use one address per line. Account (`G…`) and contract (`C…`)
-addresses are accepted. Other columns are ignored. See
-[`data/fixtures/watchlist-import.csv`](data/fixtures/watchlist-import.csv) for a
-sample file.
+### 2. Running the Frontend Dashboard
 
-The browser imports valid rows into its local watchlist, up to 20 total entries.
-Invalid, missing, duplicate, and over-limit rows are skipped with row numbers
-and reasons. **Clear imported** removes imported entries while keeping manually
-added entries. Files must be CSV or TXT and at most 1 MB; no upload is sent to
-the server.
-
-Live mode still requires GCP credentials. Setting `LUMENMAP_DATA_SOURCE=fixture` in production (`NODE_ENV` or `VERCEL_ENV`) fails closed.
-
-What you can explore in fixture mode (deterministic rows from `lib/fixtures/raw-data.ts` and `lib/fixtures/timeseries.ts`, scaled per period):
-
-- Operation-count and transaction-count treemaps (both views) with drill-down, breadcrumbs, and KPIs including active wallets and destinations
-- Operations-vs-transactions time-series, the stacked category-share chart, and the daily activity heatmap on deterministic buckets
-- Dashboard search over the loaded fixture accounts, contracts, assets, and protocols
-- Shareable URL state and side-by-side period comparison
-- Protocol TVL tiles from fixture-backed adapter snapshots (complete / partial / stale statuses stay visible)
-
-What stays empty in fixture mode: XLM/USDC volume treemaps, the per-asset payment-volume panel, and the hour-of-week heatmap. The checked-in fixture dataset provides no volume or heatmap rows, so those surfaces show no data. Use live mode with GCP credentials for real payment-volume and heatmap data.
-
-### Install and run
+In this directory:
 
 ```bash
 npm install
-cp .env.example .env.local
 npm run dev
 ```
 
-Set GCP credentials in `.env.local`, then open [http://localhost:3000](http://localhost:3000).
-
-### Environment variables
-
-| Variable | Description |
-| --- | --- |
-| `LUMENMAP_DATA_SOURCE` | `live` (default) or `fixture`. Fixture is opt-in only and **blocked in production**. Non-live sample data for local onboarding and e2e. |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to service account JSON |
-| `GCP_SERVICE_ACCOUNT_KEY` | Base64-encoded service account JSON |
-
-| `CACHE_TTL_SECONDS` | Cache TTL in seconds. Default: 900 |
-| `CACHE_TTL_SECONDS` | Cache TTL in seconds. Supported range: 1–86,400. Default: 900 (invalid, negative, zero, or over-limit values fall back to default) |
-
-
-Setup guide: [Hubble BigQuery connection](https://developers.stellar.org/docs/data/analytics/hubble/developer-guide/connecting-to-bigquery).
-Deployment & Rollback guide: [Vercel Environment & Rollback Runbook](docs/vercel-runbook.md).
-
-Do not commit `gcp-sa.json` or `.env.local`. Both are gitignored. Each contributor needs their own GCP credentials.
+The dashboard will be live at `http://localhost:3000`.
 
 ---
 
-## API
+## Environment Variables
 
-Public API request tracing can be enabled for local debugging. See
-[OpenTelemetry tracing](docs/tracing.md) for console and OTLP setup, overhead,
-and the span attribute security policy.
+### Frontend Configuration (`.env.local`)
 
-Machine-readable OpenAPI 3.1 for the public routes is served at [`/api/openapi.json`](/api/openapi.json). Import it into Swagger Editor to inspect parameters and response shapes aligned with the Zod validators used at runtime.
-
-### Cache backends
-
-Activity responses use a pluggable cache driver selected by env:
-
-| Env var | Default | Purpose |
+| Variable | Description | Default |
 | --- | --- | --- |
-| `CACHE_BACKEND` | `memory` | `memory` (process Map) or `redis` / `kv` (Redis-like driver) |
-| `CACHE_TTL_SECONDS` | `900` | Entry TTL in seconds |
+| `NEXT_PUBLIC_API_URL` | Base URL of the HangMap backend service | `http://localhost:3001` |
+| `NEXT_PUBLIC_SITE_URL` | Canonical public URL of the frontend | `http://localhost:3000` |
 
-`CACHE_BACKEND=redis` uses a Redis/KV-compatible driver with stable `lumenmap:cache:*` keys. In development, if an external client is unavailable the process falls back to in-memory. Inject a real client via `setRedisClient()` (tests use a shared fake driver to prove cross-instance hits). Hit/miss telemetry from `#97` continues to flow through `getCached(..., { track: true })`.
+### Backend Configuration (`../lumenmap-backend/.env`)
 
-### Research snapshots
-
-`POST /api/v1/snapshots` stores a bounded JSON snapshot of the current research view: `period`, `metric`, `view`, `selectedNodes`, and the KPI payload. The server adds a short opaque id, `generatedAt`, `expiresAt`, and a SHA-256 `kpiPayloadHash`. `GET /api/v1/snapshots/:id` returns that frozen payload. The dashboard opens it at `/s/:id` in read-only mode and renders KPIs plus the treemap selection from the snapshot, without a live activity requery for those fields.
-
-Storage is an in-memory map in the Node process. It does not write files and does not call Hubble, so fixture mode can create and open snapshots with no GCP credentials. Entries disappear on process restart and are not shared across instances.
-
-| Env var | Default | Purpose |
+| Variable | Description | Default |
 | --- | --- | --- |
-| `SNAPSHOT_TTL_SECONDS` | `604800` | Lifetime in seconds (7 days). Expired and unknown ids return 404. |
-| `SNAPSHOT_MAX_BYTES` | `65536` | Maximum UTF-8 POST body size. Larger bodies return 413. |
-
-The snapshot page shows `Frozen research view · generatedAt …`. A missing or expired id shows an empty state instead of the dashboard.
-
-### `GET /api/v1/activity`
-
-Compact visualization-ready activity data used by the dashboard. This response
-contains KPI cards, treemap drill-down/detail data, freshness, and metric
-provenance without duplicating entities as raw research rows.
-
-| Param | Values | Default |
-| --- | --- | --- |
-| `period` | `1d`, `7d`, `30d`, `month` | `1d` |
-
-#### Success response (`200`)
-
-```json
-{
-  "period": "1d",
-  "start": "2026-07-29T00:00:00.000Z",
-  "end": "2026-07-29T23:59:59.999Z",
-  "source": "hubble",
-  "sourceTimestamp": "2026-07-29T22:45:00.000Z",
-  "isPeriodComplete": false,
-  "kpis": {
-    "totalOps": 1234567,
-    "sorobanShare": 0.42,
-    "topCategory": "soroban",
-    "activeContracts": 89
-  },
-  "treemaps": {
-    "events": {
-      "name": "Network Activity",
-      "children": [],
-      "metric": "operation_count",
-      "unit": { "kind": "count", "subject": "operation" }
-    },
-    "actors": {
-      "name": "Accounts & Contracts",
-      "children": [],
-      "metric": "operation_count",
-      "unit": { "kind": "count", "subject": "operation" }
-    },
-    "xlm_events": {
-      "name": "Network Activity",
-      "children": [],
-      "metric": "asset_volume",
-      "unit": {
-        "kind": "asset",
-        "asset": { "type": "native", "code": "XLM" }
-      }
-    },
-    "xlm_actors": {
-      "name": "Accounts & Contracts",
-      "children": [],
-      "metric": "asset_volume",
-      "unit": {
-        "kind": "asset",
-        "asset": { "type": "native", "code": "XLM" }
-      }
-    }
-  },
-  "metricProvenance": {
-    "operation_count": {
-      "metric": "operation_count",
-      "methodology": {
-        "id": "operations",
-        "version": "1.0.0",
-        "href": "docs/metric-methodology.md#operations"
-      },
-      "source": {
-        "provider": "hubble",
-        "dataset": "crypto-stellar.crypto_stellar_dbt",
-        "tables": [
-          "enriched_history_operations",
-          "enriched_history_operations_soroban",
-          "hourly_soroban_fee_agg_contract"
-        ]
-      },
-      "aggregation": {
-        "kind": "count",
-        "function": "COUNT(*)",
-        "granularity": "selected_period",
-        "dimensions": ["type_string"]
-      },
-      "coverage": {
-        "network": "stellar_mainnet",
-        "constraints": [
-          {
-            "kind": "partial_period",
-            "completenessField": "isPeriodComplete"
-          },
-          {
-            "kind": "top_n",
-            "appliesTo": "account_children",
-            "limit": 70,
-            "partitionBy": "type_string"
-          }
-        ]
-      }
-    },
-    "asset_volume": {
-      "metric": "asset_volume",
-      "methodology": {
-        "id": "payment-volume",
-        "version": "1.0.0",
-        "href": "docs/metric-methodology.md#payment-volume"
-      },
-      "source": {
-        "provider": "hubble",
-        "dataset": "crypto-stellar.crypto_stellar_dbt",
-        "tables": ["enriched_history_operations"]
-      },
-      "aggregation": {
-        "kind": "sum",
-        "field": "amount",
-        "granularity": "selected_period",
-        "dimensions": ["type_string", "asset_identity"]
-      },
-      "coverage": {
-        "network": "stellar_mainnet",
-        "constraints": [
-          {
-            "kind": "filter",
-            "field": "asset_type",
-            "operator": "equals",
-            "value": "native"
-          }
-        ]
-      }
-    }
-  }
-}
-```
-
-Each treemap is self-describing. Count metrics use numeric node values, while
-asset-denominated metrics use decimal strings so their values cannot be treated
-as counts through the public TypeScript contract.
-
-| Metric identifier | Unit | Node value | Availability |
-| --- | --- | --- | --- |
-| `operation_count` | Operation count | `number` | Implemented |
-| `transaction_count` | Transaction count | `number` | Contract only |
-| `asset_volume` | Explicit native or issued asset | decimal `string` | XLM implemented |
-| `tvl` | Explicit valuation asset | decimal `string` | Contract only |
-
-Use a treemap's `metric` as the key into `metricProvenance`. Coverage
-constraints are discriminated by `kind`; the serialized response can represent
-inclusive time bounds, partial periods, source lag, filters, and top-N limits
-without requiring consumers to parse prose. The example abbreviates repeated
-coverage constraints; the response includes every applicable constraint.
-
-#### Caching
-
-Successful responses are shared with browsers and the CDN/edge, with a TTL that
-depends on whether the requested period is still accumulating:
-
-| Period state | `isPeriodComplete` | `Cache-Control` |
-| --- | --- | --- |
-| Still accumulating (e.g. `1d` today) | `false` | `public, max-age=60, s-maxage=60` |
-| Closed window (e.g. a past `30d`) | `true` | `public, max-age=900, s-maxage=900` |
-
-`CDN-Cache-Control` and `Vercel-CDN-Cache-Control` mirror `Cache-Control` so
-browsers and shared caches agree. The long TTL is capped by the in-process
-`CACHE_TTL_SECONDS` default (900s), so an edge copy is never older than a fresh
-in-process entry. Error and validation responses are always `no-store`.
-
-### `GET /api/v1/activity/raw`
-
-Explicit raw-research surface for consumers that need the rows used to build
-the compact visualization response. It accepts the same `period` parameter and
-returns freshness metadata plus the five raw collections under `rows`:
-
-```json
-{
-  "period": "1d",
-  "start": "2026-07-29T00:00:00.000Z",
-  "end": "2026-07-29T23:59:59.999Z",
-  "source": "hubble",
-  "sourceTimestamp": "2026-07-29T22:45:00.000Z",
-  "isPeriodComplete": false,
-  "rows": {
-    "categories": [],
-    "contracts": [],
-    "accounts": [],
-    "sorobanFunctions": [],
-    "sorobanFunctionContracts": []
-  }
-}
-```
-
-This endpoint intentionally omits `kpis`, `treemaps`, and `metricProvenance`.
-Use `/api/v1/activity` for dashboard and visualization consumers so entity data
-is not transferred twice.
-
-
-### Rate limiting
-
-Unauthenticated `/api/v1/*` routes are rate-limited per client IP (from `X-Forwarded-For` / `X-Real-IP`). The `/api/health` probe has a separate, higher limit. Exceeded limits return `429` with a stable JSON body (`code: RATE_LIMITED`, `message`, and `retryAfterSeconds`). The response headers are `Retry-After` (whole seconds until the window resets), `X-RateLimit-Limit` (requests per window), and `X-RateLimit-Remaining` (`0` on a 429). These headers are sent on throttled responses; clients should not rely on them being present on successful responses.
-
-For a 429, wait at least the `Retry-After` delay before retrying. It may be a number of seconds or an HTTP date. Use a bounded retry count, add a little jitter to spread requests, and let the caller handle the final 429. The repository helper [`parseRetryAfter`](lib/http/rate-limit.ts) returns a delay in milliseconds or `null` for a missing or invalid header. This example retries an idempotent GET up to twice, using exponential backoff when the header is unavailable:
-
-```ts
-import { parseRetryAfter } from "./lib/http/rate-limit";
-
-async function getWithRateLimitRetry(url: string): Promise<Response> {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const response = await fetch(url);
-    if (response.status !== 429 || attempt === 2) return response;
-
-    const delayMs = parseRetryAfter(response.headers.get("Retry-After"))
-      ?? 1_000 * 2 ** attempt;
-    if (delayMs > 30_000) return response; // Let the caller schedule a later retry.
-
-    await response.body?.cancel();
-    await new Promise<void>((resolve) =>
-      setTimeout(resolve, delayMs + Math.random() * 250),
-    );
-  }
-  throw new Error("Unreachable: all attempts return a response");
-}
-```
-
-| Env var | Default | Purpose |
-| --- | --- | --- |
-| `RATE_LIMIT_V1_MAX` | `60` | Max `/api/v1/*` requests per window |
-| `RATE_LIMIT_V1_WINDOW_MS` | `60000` | Window length in milliseconds |
-| `RATE_LIMIT_HEALTH_MAX` | `600` | Higher ceiling for `/api/health` probes |
-| `RATE_LIMIT_HEALTH_WINDOW_MS` | `60000` | Health window length |
-| `RATE_LIMIT_DISABLED` | unset | Set to `true` to disable enforcement locally |
-
-#### Handling 429s as a client
-
-This server always sends `Retry-After` as delta-seconds (e.g. `30`), but
-per [RFC 9110 §10.2.3](https://www.rfc-editor.org/rfc/rfc9110#section-10.2.3)
-the header may also be an HTTP-date (e.g. `Wed, 21 Oct 2015 07:28:00 GMT`).
-A well-behaved client should tolerate both forms rather than assuming a
-specific server's current behavior — `lib/http/retry-after.ts` exports a
-`parseRetryAfter`/`retryAfterFromResponse` helper that does this.
-
-```ts
-import { retryAfterFromResponse } from "@/lib/http/retry-after";
-
-async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response> {
-  const response = await fetch(url, init);
-  if (response.status !== 429) return response;
-
-  const { delayMs } = retryAfterFromResponse(response);
-  // Fall back to a fixed delay when the header was missing or unparseable.
-  await new Promise((resolve) => setTimeout(resolve, delayMs || 1000));
-  return fetch(url, init);
-}
-```
-
-### Shared error responses
-
-Both versioned activity surfaces use the same validation and safe provider
-error contract.
-
-| Status | Body | Condition |
-| --- | --- | --- |
-| `400` | `{ "code": "INVALID_PERIOD", "message": "Unsupported activity period.", "supported": ["1d", "7d", "30d", "month"] }` | `period` query param is present but not one of the supported values |
-| `500` | `{ "code": "INTERNAL_ERROR", "message": "An unexpected error occurred. Please try again later." }` | Provider configuration or query failure |
-
-Internal provider error messages are never leaked; only the documented public
-messages above are returned.
-
-### `GET /api/activity` (deprecated alias)
-
-The unversioned `GET /api/activity` route is retained as a deprecated alias of
-`GET /api/v1/activity`. It accepts the same `period` parameter, returns the
-same response shape, and applies the same validation and error contract. It is
-implemented by re-exporting the versioned route handler, so behavior is
-identical.
-
-`/api/activity` will be removed in a future release. New consumers should use
-`/api/v1/activity`.
-
-### `GET /api/activity/health`
-
-Checks the activity SQL queries with BigQuery dry runs. The response contains
-`status` (`healthy` or `unavailable`), `source` (`live` or `fixture`), and a
-`queries` array. Each live query has a stable `name`, `status` (`ok` or
-`error`), `latencyMs`, and an `errorCode` on failure. A failed query returns
-HTTP 503. Provider messages and SQL are never included in the response.
-Fixture mode returns `source: "fixture"` and an empty `queries` array because
-no upstream queries are probed.
-
-### `GET /api/category-share`
-
-| Param | Values | Default |
-| --- | --- | --- |
-| `period` | `1d`, `7d`, `30d`, `month` | `1d` |
-
-Returns UTC-bucketed category totals for the stacked area chart (`hour` for `1d`, otherwise `day`). Category colors match the treemap. Without GCP credentials the endpoint serves a checked-in fixture marked `source: "fixture"`.
+| `PORT` | Port for the Express REST server | `3001` |
+| `LUMENMAP_DATA_SOURCE` | Set to `fixture` for deterministic local data without GCP | `fixture` (if credentials absent) |
+| `GCP_SERVICE_ACCOUNT_KEY` | Base64-encoded Google Cloud service account JSON | None |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to Google Cloud credentials file | None |
+| `CACHE_BACKEND` | `memory` or `redis` | `memory` |
 
 ---
 
-### `GET /api/v1/timeseries`
+## API Endpoints (Backend)
 
-| Param | Values | Default |
-| --- | --- | --- |
-| `period` | `1d`, `7d`, `30d`, `month` | `1d` |
-| `granularity` | `hour`, `day` | `hour` for `1d`, otherwise `day` |
+The backend provides full REST endpoints matching OpenAPI 3.1 specification at `/api/openapi.json`:
 
-Returns UTC-bucketed operation and transaction counts with partial-bucket flags,
-series totals, and the same metric provenance block used by `/api/v1/activity`.
-Without GCP credentials the endpoint serves deterministic fixture buckets marked
-`source: "fixture"`.
+- `GET /api/health` — Service readiness and dependency health checks
+- `GET /api/activity?period={1d|7d|30d|month}` — Dashboard activity and treemap dataset
+- `GET /api/v1/flow?period={1d|7d|30d|month}` — Payment flow edges and nodes
+- `GET /api/v1/timeseries?period={...}&granularity={hour|day}` — Time-series operation metrics
+- `GET /api/v1/protocols/health` — Protocol scorecard health rankings
+- `GET /api/v1/snapshots/:id` — Retrieve saved research snapshot
+- `POST /api/v1/snapshots` — Save a new research snapshot
+- `GET /api/openapi.json` — Machine-readable OpenAPI 3.1 schema
 
-Example:
+---
 
+## Testing & Quality
+
+### Frontend Tests
 ```bash
-curl "http://localhost:3000/api/v1/timeseries?period=7d"
+npm test          # Run unit and integration tests
+npm run typecheck # TypeScript validation
 ```
 
----
-
-### `GET /api/v1/flow`
-
-Returns a directed payment-flow graph for the selected period. The dashboard's
-Flow view opens the period overview; double-click an account node or use the
-account detail action to request its direct counterparties. Use **Back to period
-overview** to leave the 1-hop drill.
-
-| Param | Values | Default |
-| --- | --- | --- |
-| `period` | `1d`, `7d`, `30d`, `month` | `1d` |
-| `network` | `mainnet`, `testnet` | `mainnet` |
-| `account` | Stellar `G` account address | absent (period overview) |
-
-The response has `nodes`, `edges`, `account`, and `sampled` fields. Each edge
-has a direction, asset identity, amount in stroops, and operation count. The
-API ranks at most 100 edges **after** applying the account filter, so an ego
-view never includes edges between two counterparties. An account without any
-edges returns its node and an empty `edges` array. Fixture mode includes a
-known Kraken → Lobstr edge for local verification.
-
-For funding and account-drain operations, Hubble does not provide an amount in
-the fields used by this query. Such edges have `amountComplete: false`; the
-table shows an em dash instead of suggesting their measured amount is zero.
-
----
-
-### Planned endpoints
-
-| Endpoint | Description |
-| --- | --- |
-| `GET /api/v1/dapps` | Not planned separately: top contracts by protocol already ship inside `GET /api/v1/activity` as the `protocols` summary |
-
----
-
-## Log schema
-
-Server-side structured logs are written to stdout as newline-delimited JSON.
-
-### Common fields
-
-All log entries include `timestamp` (ISO 8601), `level` (`info` | `warn` | `error`), `event` (dot-separated name), and `correlationId` (per-request UUID that links all log lines for one HTTP request).
-
-Durations are in milliseconds, measured with `process.hrtime`.
-
-### Events
-
-| Event | Level | When |
-| --- | --- | --- |
-| `activity.request.start` | info | Request received |
-| `activity.request.complete` | info | Response sent successfully |
-| `activity.request.error` | error | Response failed |
-| `activity.cache.hit` | info | In-memory cache returned fresh data |
-| `activity.cache.miss` | info | Cache skipped or expired; fetching from BigQuery |
-| `activity.query.start` | info | BigQuery query started |
-| `activity.query.complete` | info | BigQuery query returned rows |
-| `activity.query.error` | error | BigQuery query failed |
-| `activity.fetch.complete` | info | All parallel BigQuery queries finished |
-| `activity.kpi.build` | info | KPI calculation finished |
-| `activity.label.resolve` | info | Entity label resolution finished |
-| `activity.treemap.build` | info | Treemap hierarchy built |
-
-### Query events
-
-`activity.query.*` events carry `queryName` (`category`, `contract`, `account`, `sorobanFunction`, `sorobanFunctionContract`, `accountMetadata`). Completion events include `rowCount`.
-
-### Error classification
-
-`activity.request.error` and `activity.query.error` events carry an `errorClass` field:
-
-| Class | Meaning |
-| --- | --- |
-| `validation` | Missing or misconfigured credentials, invalid parameters |
-| `timeout` | Query deadline exceeded |
-| `cost_limit` | Query exceeded billing tier or rate limit |
-| `provider` | BigQuery returned a non-actionable error |
-
-### Redaction
-
-The following are **never** written to logs:
-- GCP credentials (`GCP_SERVICE_ACCOUNT_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`)
-- SQL parameter values (date ranges, type lists, account/contract ID lists)
-- Raw account addresses, contract IDs, or entity payloads
-- Request and response bodies
-
-### Example
-
-```
-{"timestamp":"2026-07-29T12:00:00.000Z","level":"info","event":"activity.request.start","correlationId":"a1b2c3d4-...","period":"1d"}
-{"timestamp":"2026-07-29T12:00:00.001Z","level":"info","event":"activity.cache.miss","correlationId":"a1b2c3d4-...","period":"1d"}
-{"timestamp":"2026-07-29T12:00:00.002Z","level":"info","event":"activity.query.start","correlationId":"a1b2c3d4-...","queryName":"category"}
-{"timestamp":"2026-07-29T12:00:01.500Z","level":"info","event":"activity.query.complete","correlationId":"a1b2c3d4-...","queryName":"category","durationMs":1498,"rowCount":12}
-{"timestamp":"2026-07-29T12:00:04.200Z","level":"info","event":"activity.fetch.complete","correlationId":"a1b2c3d4-...","period":"1d","durationMs":4198}
-{"timestamp":"2026-07-29T12:00:04.210Z","level":"info","event":"activity.request.complete","correlationId":"a1b2c3d4-...","period":"1d","durationMs":4209}
-```
-
----
-
-## Entity registry
-
-Known wallets and contracts are in [`data/entities.json`](data/entities.json):
-
-```json
-{
-  "CA4HEQTL2WPEUYKYKCDOHCDNIV4QHNJ7EL4J4NQ6VADP7SYHVRYZ7AW2": {
-    "name": "Soroswap",
-    "category": "defi",
-    "protocol": "Soroswap"
-  }
-}
-```
-
-Add rows to label more actors in the treemap.
-
-Community labels need public address-to-name proof. See the [proposal and review criteria](CONTRIBUTING.md#proposing-a-label) before editing the registry, and run `npm run entities:validate` on changes.
-
+### Backend Tests
 ```bash
-npm run sync:directory
+cd ../lumenmap-backend
+npm test          # Run API route and query tests
 ```
 
 ---
 
-## Project structure
+## Embeds
 
-```text
-app/
-  page.tsx
-  api/activity/route.ts            (deprecated alias → _handler.ts)
-  api/activity/_handler.ts         (shared handler for both routes)
-  api/v1/activity/route.ts         (versioned route → _handler.ts)
-components/dashboard/
-lib/hubble/
-lib/entities/
-data/entities.json
-scripts/
-```
-
----
-
-## Scripts
-
-| Command | Description |
-| --- | --- |
-| `npm run dev` | Development server |
-| `npm run build` | Production build |
-| `npm run start` | Production server |
-| `npm run lint` | ESLint |
-
-| `npm run test:e2e` | Playwright e2e suite against fixture data (builds and starts the app automatically) |
-
-| `npm test` | Deterministic unit tests (single run, no external credentials) |
-
-| `npm run test:hubble` | BigQuery query smoke test |
-| `npm run test:issues` | Validate GitHub issue templates |
-| `npm run sync:directory` | Sync labels from Stellar Expert |
-| `npm run typecheck` | TypeScript type-check (uses project tsconfig, no emitted files) |
-
----
-
-## End-to-end tests
-
-Browser-level regression tests live in [`e2e/`](e2e) and run with
-[Playwright](https://playwright.dev) against deterministic fixture data.
-The suite covers the primary user journey: initial dashboard load, metric
-(period) changes, treemap hierarchy views, tile selection, drill-down,
-breadcrumb navigation, and the details panel — with network access to
-anything outside localhost disabled.
-
-```bash
-npx playwright install chromium  # one-time browser install
-npm run test:e2e                 # builds and serves the app in fixture mode
-```
-
-`playwright.config.ts` starts the production server with
-`LUMENMAP_DATA_SOURCE=fixture` and blank GCP credentials, so the suite runs
-without a BigQuery service account and produces the same results on every
-run, locally and in CI (see `.github/workflows/e2e.yml`).
-
-### Experimental Flow view
-
-Flow is off by default in production. Maintainers can enable it by setting
-`LUMENMAP_ENABLE_FLOW_VIEW=true`. In development or fixture mode, use
-`?view=flow&flow=1` to preview it. When the view is disabled, a direct
-`?view=flow` URL redirects to the dashboard. The query opt-in is ignored in
-production, so public access requires the environment flag.
-
----
-
-## Embeddable widgets
-
-Read-only KPI and treemap widgets can be framed from an allowlisted parent.
-Set `EMBED_FRAME_ANCESTORS` to a comma-separated origin list. When the variable
-is unset, local harnesses are allowed. A configured list blocks unknown parents.
+HangMap panels can be embedded in external apps via iframes:
 
 ```html
 <iframe
-  title="LumenMap KPI"
-  src="https://lumenmap.example/embed/kpi?period=7d&metric=ops"
-  width="640"
-  height="180"
-  style="border:0"
-></iframe>
-<iframe
-  title="LumenMap treemap"
-  src="https://lumenmap.example/embed/treemap?period=30d&metric=xlm_volume"
-  width="640"
-  height="280"
-  style="border:0"
+  title="HangMap KPI"
+  src="http://localhost:3000/embed/kpi?period=7d&metric=ops"
+  width="100%"
+  height="160"
+  frameborder="0"
 ></iframe>
 ```
 
-Local fixture harness: `/embed-harness.html`. Widgets follow `prefers-color-scheme`
-and do not include watchlists, exports, or the Flow canvas.
-
-## Data notes
-
-Metric definitions, current-period coverage, Hubble freshness limits, source fields, and top-N qualifications are documented in the [versioned metric methodology](docs/metric-methodology.md). In particular, Hubble refreshes in intraday batches, current periods are provisional, and API responses are cached at the edge: 60s for periods that are still accumulating and 900s for closed periods (errors are never cached).
-
-## Activity categories
-
-| Category | Operation types |
-| --- | --- |
-| Soroban | `invoke_host_function`, `extend_footprint_ttl`, `restore_footprint` |
-| Payments | `payment`, `path_payment_strict_receive`, `path_payment_strict_send`, `create_account` |
-| DEX | `manage_buy_offer`, `manage_sell_offer`, liquidity pool deposit and withdraw |
-| Trustlines | `change_trust` |
-| Account | `set_options`, `manage_data`, sponsorship operations |
-| Other | Remaining types |
-
-## Keyboard shortcuts
-
-Press `?` on the dashboard (or the keyboard icon in the header) to open the
-shortcuts dialog. The dialog is rendered from `lib/shortcuts.ts`; the table
-below mirrors it — update both together.
-
-| Shortcut | Action |
-| --- | --- |
-| `/` | Focus the search box |
-| `↑` `↓` | Move through search results (while results are open) |
-| `Enter` | Open the highlighted search result |
-| `Esc` | Close the results list (while the search box is focused) |
-| `[` | Previous period |
-| `]` | Next period |
-| `↑` `↓` `←` `→` | Change period (while the period selector is focused) |
-| `Tab` | Move between treemap tiles |
-| `Enter` / `Space` | Open details for, or drill into, the focused tile |
-| `↑` `↓` `←` `→` | Switch treemap view (while the view selector is focused) |
-| `Esc` | Close the detail panel and return focus to the tile |
-| `?` | Show or hide the shortcuts dialog |
-| `Esc` | Close the shortcuts dialog |
-
-Shortcuts never fire while typing in a text field, so `?` and `/` can be
-typed into search and other inputs normally.
-
-## Contributing
-
-Contributions are welcome at [github.com/lumenmap/lumenmap](https://github.com/lumenmap/lumenmap).
-
-1. Fork the repository and create a branch.
-2. Make your changes. Run `npm run lint` before opening a pull request.
-3. If you change Hubble queries, run `npm run test:hubble` with valid GCP credentials.
-4. Open a pull request with a short description of what changed and why.
-
-To add wallet or dApp labels, edit [`data/entities.json`](data/entities.json) or run `npm run sync:directory`.
+---
 
 ## License
 
-[MIT](LICENSE)
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, fixture mode, and PR expectations.
-
-### Running Smoke Checks
-
-Maintainers can trigger the smoke check manually via GitHub Actions (`workflow_dispatch`) by providing the target deployment URL, or run it locally:
-
-```bash
-node scripts/smoke-check.mjs [https://your-deployment-url.vercel.app](https://your-deployment-url.vercel.app)
+MIT

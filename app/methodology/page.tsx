@@ -21,9 +21,9 @@ const FLOW_SUBSECTIONS = [
 ] as const;
 
 export const metadata = {
-  title: "Metric methodology · LumenMap",
+  title: "Metric methodology · HangMap",
   description:
-    "Canonical definitions for LumenMap operations, transactions, volume, TVL, and related activity metrics.",
+    "Canonical definitions for HangMap operations, transactions, volume, TVL, and related activity metrics.",
 };
 
 export default function MethodologyPage() {

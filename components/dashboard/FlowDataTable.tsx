@@ -221,6 +221,16 @@ export interface FlowDataTableProps {
   caption?: string;
   /** Top-N sampling coverage; badge renders only when coverage is below 100%. */
   coverage?: FlowCoverage | null;
+  /** Renders table-shaped loading skeletons instead of data. */
+  isLoading?: boolean;
+  /** Renders the error panel with retry instead of data. */
+  isError?: boolean;
+  /** Error copy shown in the error panel. */
+  errorMessage?: string;
+  /** Refetch trigger invoked by the retry button. */
+  onRetry?: () => void | Promise<void>;
+  /** Disables the retry button while a refetch is in flight. */
+  retryPending?: boolean;
 }
 
 const HEADER_CELL =
@@ -386,6 +396,11 @@ export function FlowDataTable({
   onSelect,
   caption = "Flow graph edges",
   coverage = null,
+  isLoading = false,
+  isError = false,
+  errorMessage = "Unable to load flow data.",
+  onRetry,
+  retryPending = false,
 }: FlowDataTableProps) {
   const edgeSort = useSort<EdgeSortKey>("amount");
   const nodeSort = useSort<NodeSortKey>("outflow");

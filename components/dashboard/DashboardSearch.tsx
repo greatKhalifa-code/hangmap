@@ -94,6 +94,8 @@ export function DashboardSearch() {
     return () => clearTimeout(handle);
   }, [searchQuery]);
 
+  const pending = debouncedQuery !== searchQuery;
+
   const results = useMemo(
     () => searchIndex(index, debouncedQuery),
     [index, debouncedQuery],
